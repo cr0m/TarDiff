@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox
 from datetime import datetime
 
 # List of file extensions to exclude from printing content
-EXCLUDED_EXTENSIONS = {'.mp4', '.pdf', '.png', '.jpeg', '.jpg', '.gif', '.bmp', '.avi', '.mov', '.mkv', '.webm'}
+EXCLUDED_EXTENSIONS = {'.mp4', '.pdf', '.png', '.jpeg', '.jpg', '.gif', '.bmp', '.avi', '.mov', '.mkv', '.webm', '.ics', '.docx', '.doc'}
 
 def compute_md5(file_path):
     """Compute MD5 checksum of a file."""
@@ -47,13 +47,13 @@ def get_files_with_md5_and_size(startpath):
             file_info[relative_path] = (md5_checksum, file_size)
     return file_info
 
-def generate_diff(file1, file2):
+def generate_diff(file1, file2, tar1_path, tar2_path):
     """Generate a diff between two files."""
     try:
         with open(file1, 'r', encoding='utf-8', errors='ignore') as f1, open(file2, 'r', encoding='utf-8', errors='ignore') as f2:
             f1_lines = f1.readlines()
             f2_lines = f2.readlines()
-            diff = difflib.unified_diff(f1_lines, f2_lines, fromfile=file1, tofile=file2)
+            diff = difflib.unified_diff(f1_lines, f2_lines, fromfile=f"{tar1_path}: {file1}", tofile=f"{tar2_path}: {file2}")
             return ''.join(diff)
     except UnicodeDecodeError:
         return "Binary files differ"
@@ -71,11 +71,20 @@ def is_excluded_extension(file_path):
     _, ext = os.path.splitext(file_path)
     return ext.lower() in EXCLUDED_EXTENSIONS
 
-def compare_files(tar1_files, tar2_files, extract_path1, extract_path2, output_file):
+def compare_files(tar1_files, tar2_files, extract_path1, extract_path2, output_file, tar1_path, tar2_path):
     """Compare files from two dictionaries and save differences to a file."""
     all_files = set(tar1_files.keys()).union(tar2_files.keys())
 
     with open(output_file, 'w', encoding='utf-8') as f:
+        # Write header
+        f.write("Comparison Report\n")
+        f.write("=" * 60 + "\n")
+        f.write(f"Compared Files:\n")
+        f.write(f"  - File 1: {tar1_path}\n")
+        f.write(f"  - File 2: {tar2_path}\n")
+        f.write(f"Output File: {output_file}\n")
+        f.write("=" * 60 + "\n\n")
+
         for file in all_files:
             info_tar1 = tar1_files.get(file)
             info_tar2 = tar2_files.get(file)
@@ -89,7 +98,7 @@ def compare_files(tar1_files, tar2_files, extract_path1, extract_path2, output_f
                     f.write("-" * 60 + "\n")
                     f.write(f"  - tar1 MD5: {md5_tar1}, size: {format_size(size_tar1)}\n")
                     f.write(f"  - tar2 MD5: {md5_tar2}, size: {format_size(size_tar2)}\n")
-                    diff = generate_diff(os.path.join(extract_path1, file), os.path.join(extract_path2, file))
+                    diff = generate_diff(os.path.join(extract_path1, file), os.path.join(extract_path2, file), tar1_path, tar2_path)
                     f.write(f"Diff:\n{diff}\n")
             elif info_tar1:
                 md5_tar1, size_tar1 = info_tar1
@@ -111,7 +120,7 @@ def compare_files(tar1_files, tar2_files, extract_path1, extract_path2, output_f
                     f.write(f"Content:\n{content}\n")
 
 def main(tar1_path, tar2_path, output_dir):
-    timestamp = datetime.now().strftime("%H%M-%m%d%y")
+    timestamp = datetime.now().strftime("%H%M%d%m%y")
     output_file = os.path.join(output_dir, f"differences_output_{timestamp}.txt")
     
     with tempfile.TemporaryDirectory() as extract_path1, tempfile.TemporaryDirectory() as extract_path2:
@@ -121,7 +130,7 @@ def main(tar1_path, tar2_path, output_dir):
         tar1_files = get_files_with_md5_and_size(extract_path1)
         tar2_files = get_files_with_md5_and_size(extract_path2)
 
-        compare_files(tar1_files, tar2_files, extract_path1, extract_path2, output_file)
+        compare_files(tar1_files, tar2_files, extract_path1, extract_path2, output_file, tar1_path, tar2_path)
 
     # Open the output file in Notepad++
     subprocess.run(['notepad++', output_file])
@@ -141,10 +150,11 @@ def run_comparison(tar1_path, tar2_path, output_dir):
         messagebox.showerror("Error", "Please select both tar files and specify an output directory.")
         return
     main(tar1_path, tar2_path, output_dir)
+    messagebox.showinfo("Completed", "Comparison completed and the output file has been opened in Notepad++.")
 
 def create_gui():
     root = tk.Tk()
-    root.title("Backup Tar File Comparator")
+    root.title("Tar File Comparator")
 
     tk.Label(root, text="Select the first tar file:").grid(row=0, column=0, padx=10, pady=5, sticky="e")
     tar1_path_var = tk.StringVar()
